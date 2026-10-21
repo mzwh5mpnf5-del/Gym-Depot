@@ -188,12 +188,37 @@ button:focus-visible, .wl-row:focus-visible { outline: 2px solid var(--accent); 
 .chip-check:has(input:checked) { border-color: var(--accent); background: rgba(255,138,31,.12); }
 .chip-check input { width: 16px; height: 16px; accent-color: var(--accent); }
 .colors { display: flex; gap: 8px; }
-.colors label { cursor: pointer; }
-.colors input { position: absolute; opacity: 0; pointer-events: none; }
+.colors label { cursor: pointer; position: relative; }
+.colors input { position: absolute; inset: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .colors span { display: block; width: 30px; height: 30px; border-radius: 50%; background: var(--pc); box-shadow: inset 0 0 0 2px rgba(0,0,0,.3); }
 .colors input:checked + span { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--ink); }
 .colors input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 4px; }
 .list { display: flex; flex-direction: column; }
+.split-bar { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+.split-bar button { flex: none; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 999px; padding: 7px 14px; font: 600 .9rem var(--font-display); text-transform: uppercase; letter-spacing: .04em; cursor: pointer; }
+.split-bar button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.split-bar .add { color: var(--accent); border-style: dashed; }
+.next { display: grid; grid-template-columns: 64px minmax(0,1fr) auto; gap: 14px; align-items: center; padding: 14px; border-radius: var(--r); border: 1px solid rgba(255,138,31,.4); background: linear-gradient(90deg, rgba(255,138,31,.16), rgba(255,138,31,.03)); }
+.next .plate { width: 64px; height: 64px; }
+.next h3 { font-size: 1.5rem; }
+@media (max-width: 480px) { .next { grid-template-columns: 54px minmax(0,1fr); } .next .plate { width: 54px; height: 54px; } .next .btn { grid-column: 1 / -1; } }
+.split-tools { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.order { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; counter-reset: o; }
+.order li { counter-increment: o; display: grid; grid-template-columns: 26px minmax(0,1fr) auto; gap: 8px; align-items: center; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 6px 6px 10px; }
+.order li::before { content: counter(o); font: 700 1rem var(--font-display); color: var(--accent); }
+.order li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.order li .mv { display: flex; gap: 2px; }
+.order li .mv button { width: 34px; height: 34px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); cursor: pointer; font: 600 .95rem var(--font-body); }
+.order li .mv button:disabled { opacity: .3; cursor: default; }
+.order li .mv button.rm:hover { color: var(--down); }
+.order .none { display: block; color: var(--muted); font-size: .9rem; padding: 6px 0; }
+.order .none::before { content: none; }
+details.tpl summary { cursor: pointer; font: 600 .95rem var(--font-display); text-transform: uppercase; letter-spacing: .05em; color: var(--accent); padding: 4px 0; }
+.tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+.tpl-card { text-align: left; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 8px; padding: 10px 12px; cursor: pointer; font: inherit; display: flex; flex-direction: column; gap: 3px; }
+.tpl-card:hover { border-color: var(--accent); }
+.tpl-card b { font: 700 1.05rem var(--font-display); text-transform: uppercase; letter-spacing: .03em; }
+.tpl-card span { font-size: .82rem; color: var(--muted); }
 .item { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .item:last-child { border-bottom: 0; }
 .item .sub { font-size: .8rem; color: var(--muted); }
@@ -321,8 +346,13 @@ button:focus-visible, .wl-row:focus-visible { outline: 2px solid var(--accent); 
 
     <div class="panel knurl stack" id="woPanel">
       <div class="between"><h2>Workouts</h2><button class="btn ghost sm" type="button" id="freeBtn">Freies Training</button></div>
+      <div class="split-bar" id="splitBar"></div>
+      <div id="nextBox"></div>
       <div class="wo-list" id="woList"></div>
-      <div id="tplBox"></div>
+      <details class="tpl" id="tplDetails"><summary>Vorlagen-Splits anlegen</summary>
+        <p class="small muted" style="margin:0 0 10px">Legt den Split mit Workouts und Übungen an. Danach kannst du alles ändern.</p>
+        <div class="tpl-grid" id="tplList"></div>
+      </details>
     </div>
 
     <div class="grid two">
@@ -338,15 +368,32 @@ button:focus-visible, .wl-row:focus-visible { outline: 2px solid var(--accent); 
             <label title="Weiß · 5 kg"><input type="radio" name="woc" value="white"><span style="--pc:var(--plate-white)"></span></label>
           </div>
         </div>
-        <div><div class="label" style="margin-bottom:6px">Übungen</div><div class="chips" id="woEx"></div></div>
-        <label class="f">Neue Übungen dazu (mit Komma trennen)<input id="woNew" maxlength="200" placeholder="z. B. Dips, Seitheben"></label>
+        <div><div class="label" style="margin-bottom:6px">Übungen in dieser Reihenfolge</div><ol class="order" id="woOrder"></ol></div>
+        <div class="row">
+          <label class="f" style="flex-basis:170px">Übung hinzufügen<select id="woAddSel"></select></label>
+          <label class="f" id="woNewWrap" hidden style="flex-basis:150px">Name der neuen Übung<input id="woNew" maxlength="40" placeholder="z. B. Dips"></label>
+          <button class="btn ghost" type="button" id="woAddBtn">Hinzufügen</button>
+        </div>
         <button class="btn block" type="submit" id="woSubmit">Workout speichern</button>
       </form>
 
-      <div class="panel stack">
-        <h3>Rekorde</h3>
-        <div class="pr-list" id="prList"></div>
-      </div>
+      <form class="panel stack" id="spForm" autocomplete="off">
+        <div class="between"><h3 id="spFormTitle">Eigenen Split erstellen</h3><button class="btn ghost sm" type="button" id="spCancel" hidden>Abbrechen</button></div>
+        <p class="small muted" style="margin:0">Ein Split ist dein Wochenplan aus mehreren Workouts, z. B. Push → Pull → Beine. Die App zeigt dir dann immer, welches Workout als Nächstes dran ist.</p>
+        <label class="f">Name<input id="spName" required maxlength="30" placeholder="z. B. Mein 4er-Split"></label>
+        <div><div class="label" style="margin-bottom:6px">Workouts in dieser Reihenfolge</div><ol class="order" id="spOrder"></ol></div>
+        <div class="row">
+          <label class="f" style="flex-basis:170px">Workout hinzufügen<select id="spAddSel"></select></label>
+          <button class="btn ghost" type="button" id="spAddBtn">Hinzufügen</button>
+        </div>
+        <p class="small muted" style="margin:0">Fehlt ein Workout? Erstell es links, dann kannst du es hier auswählen. Ein Workout darf auch zweimal vorkommen, z. B. für Push · Pull · Beine · Push · Pull.</p>
+        <button class="btn block" type="submit" id="spSubmit">Split speichern</button>
+      </form>
+    </div>
+
+    <div class="panel stack">
+      <h3>Rekorde</h3>
+      <div class="pr-list" id="prList"></div>
     </div>
 
     <div class="panel stack">
@@ -612,40 +659,101 @@ function renderWeek() {
   $("#heat").innerHTML = h;
 }
 
-/* ---------------- Workouts ---------------- */
+/* ---------------- Workouts & Splits ---------------- */
 const PLATE = { red: "var(--plate-red)", blue: "var(--plate-blue)", yellow: "var(--plate-yellow)", green: "var(--plate-green)", white: "var(--plate-white)" };
-const workouts = () => Object.entries(S.docs).filter(([, v]) => v && v.kind === "workout").map(([id, v]) => Object.assign({ _id: id }, v)).sort((a, b) => (a.created || 0) - (b.created || 0));
-function renderWorkouts() {
-  const list = workouts(), exs = Object.fromEntries(exercises().map(e => [e._id, e]));
-  $("#woPanel").hidden = !!S.active;
-  $("#woList").innerHTML = list.length ? list.map(w => {
-    const names = (w.exIds || []).filter(id => exs[id]).map(id => exs[id].name);
-    return `<div class="wo"><div class="plate" style="--pc:${PLATE[w.color] || PLATE.red}"></div>
-      <div style="min-width:0"><h3>${esc(w.name)}</h3><div class="meta">${names.length} Übungen${w.last ? " · zuletzt " + dShort(w.last) : ""}</div><div class="meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(names.join(" · "))}</div></div>
-      <div class="acts" data-wo="${esc(w._id)}"><button class="btn" type="button" data-act="start">Starten</button><button class="btn ghost sm" type="button" data-act="edit" aria-label="Bearbeiten">✎</button><button class="btn ghost sm" type="button" data-act="del" aria-label="Löschen">×</button></div></div>`;
-  }).join("") : `<div class="empty" style="grid-column:1/-1">Noch keine Workouts. Erstell unten dein erstes oder nimm die Vorlage.</div>`;
-  $("#tplBox").innerHTML = list.length ? "" : `<button class="btn ghost block" type="button" id="tplBtn">Vorlage anlegen: Push · Pull · Beine</button>`;
-  // form exercise chips (keep checked state)
-  const checked = new Set($$("#woEx input:checked").map(i => i.value));
-  const editing = editingWo && S.docs[editingWo];
-  if (editing && !$("#woEx").dataset.filled) (editing.exIds || []).forEach(id => checked.add(id));
-  $("#woEx").innerHTML = exercises().map(e => `<label class="chip-check"><input type="checkbox" value="${esc(e._id)}" ${checked.has(e._id) ? "checked" : ""}>${esc(e.name)}</label>`).join("") || `<span class="small muted">Noch keine Übungen. Trag sie unten als neue Übungen ein.</span>`;
-  $("#woEx").dataset.filled = editing ? "1" : "";
+const COLORS = ["red", "blue", "green", "yellow", "white"];
+const byKind = k => Object.entries(S.docs).filter(([, v]) => v && v.kind === k).map(([id, v]) => Object.assign({ _id: id }, v)).sort((a, b) => (a.created || 0) - (b.created || 0));
+const workouts = () => byKind("workout");
+const splits = () => byKind("split");
+const exName = id => S.docs[id] ? S.docs[id].name : "?";
+function activeSplit() { const id = settings().activeSplit; return id && S.docs[id] ? Object.assign({ _id: id }, S.docs[id]) : null; }
+function setActiveSplit(id) { S.docs.settings = Object.assign(clone(settings()), { activeSplit: id }); lsSave(); renderAll(); }
+function nextInSplit(sp) {
+  const ids = (sp.woIds || []).filter(id => S.docs[id]); if (!ids.length) return null;
+  let bestI = -1, bestT = "";
+  ids.forEach((id, i) => { const t = (S.docs[id].lastAt || S.docs[id].last || ""); if (t && t >= bestT) { bestT = t; bestI = i; } });
+  return ids[(bestI + 1) % ids.length];
 }
-let editingWo = null;
-function resetWoForm() { editingWo = null; $("#woForm").reset(); $("#woEx").dataset.filled = ""; $$("#woEx input").forEach(i => i.checked = false); $("#woFormTitle").textContent = "Workout erstellen"; $("#woSubmit").textContent = "Workout speichern"; $("#woCancel").hidden = true; }
+function woCard(w, n) {
+  const names = (w.exIds || []).filter(id => S.docs[id]).map(exName);
+  return `<div class="wo"><div class="plate" style="--pc:${PLATE[w.color] || PLATE.red}"></div>
+    <div style="min-width:0"><h3>${n ? n + ". " : ""}${esc(w.name)}</h3><div class="meta">${names.length} Übungen${w.last ? " · zuletzt " + dShort(w.last) : ""}</div><div class="meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(names.join(" · "))}</div></div>
+    <div class="acts" data-wo="${esc(w._id)}"><button class="btn" type="button" data-act="start">Starten</button><button class="btn ghost sm" type="button" data-act="edit">Bearbeiten</button><button class="btn ghost sm" type="button" data-act="del" aria-label="${esc(w.name)} löschen">×</button></div></div>`;
+}
+function renderWorkouts() {
+  $("#woPanel").hidden = !!S.active;
+  const all = workouts(), sps = splits(), sp = activeSplit();
+  $("#splitBar").innerHTML = (sps.length ? `<button type="button" data-split="" aria-pressed="${!sp}">Alle Workouts</button>` + sps.map(x => `<button type="button" data-split="${esc(x._id)}" aria-pressed="${sp && sp._id === x._id}">${esc(x.name)}</button>`).join("") : "")
+    + `<button type="button" class="add" data-split="__new">+ Eigener Split</button>`;
+  if (sp) {
+    const nx = nextInSplit(sp), w = nx && S.docs[nx];
+    $("#nextBox").innerHTML = (w ? `<div class="next"><div class="plate" style="--pc:${PLATE[w.color] || PLATE.red}"></div><div style="min-width:0"><div class="label" style="color:var(--accent-2)">Als Nächstes in ${esc(sp.name)}</div><h3>${esc(w.name)}</h3><div class="small muted">${(w.exIds || []).filter(id => S.docs[id]).length} Übungen</div></div><button class="btn" type="button" data-startnext="${esc(nx)}">Starten</button></div>` : `<div class="empty">Dieser Split hat noch keine Workouts.</div>`)
+      + `<div class="split-tools" data-sp="${esc(sp._id)}"><button class="btn ghost sm" type="button" data-spact="edit">Split bearbeiten</button><button class="btn ghost sm" type="button" data-spact="del">Split löschen</button></div>`;
+    const ids = (sp.woIds || []).filter(id => S.docs[id]);
+    $("#woList").innerHTML = ids.map((id, i) => woCard(Object.assign({ _id: id }, S.docs[id]), i + 1)).join("");
+  } else {
+    $("#nextBox").innerHTML = "";
+    $("#woList").innerHTML = all.length ? all.map(w => woCard(w)).join("") : `<div class="empty" style="grid-column:1/-1">Noch keine Workouts. Nimm unten eine Vorlage oder erstell dein eigenes Workout.</div>`;
+  }
+  $("#tplList").innerHTML = TPL.map((t, i) => `<button type="button" class="tpl-card" data-tpl="${i}"><b>${esc(t.name)}</b><span>${esc(t.desc)}</span><span>${t.wos.map(w => esc(w[0])).join(" · ")}</span></button>`).join("");
+  if (!all.length) $("#tplDetails").open = true;
+  renderWoOrder(); renderSpOrder();
+}
+$("#splitBar").addEventListener("click", e => {
+  const b = e.target.closest("[data-split]"); if (!b) return;
+  if (b.dataset.split === "__new") { resetSpForm(); $("#spForm").scrollIntoView({ behavior: "smooth", block: "start" }); $("#spName").focus(); return; }
+  setActiveSplit(b.dataset.split || null);
+});
+$("#nextBox").addEventListener("click", e => {
+  const st = e.target.closest("[data-startnext]"); if (st) { startSession(st.dataset.startnext); return; }
+  const b = e.target.closest("[data-spact]"); if (!b) return; const box = b.closest("[data-sp]"), id = box.dataset.sp, sp = S.docs[id];
+  if (b.dataset.spact === "edit") { editingSp = id; spDraft = [...(sp.woIds || [])].filter(x => S.docs[x]); $("#spName").value = sp.name; $("#spFormTitle").textContent = "Split bearbeiten"; $("#spSubmit").textContent = "Änderungen speichern"; $("#spCancel").hidden = false; renderSpOrder(); $("#spForm").scrollIntoView({ behavior: "smooth", block: "start" }); }
+  if (b.dataset.spact === "del") box.innerHTML = `<div class="confirm">Split „${esc(sp.name)}“ löschen? Die Workouts bleiben erhalten. <button class="btn danger sm" type="button" data-spact="delyes">Löschen</button><button class="btn ghost sm" type="button" data-spact="delno">Abbrechen</button></div>`;
+  if (b.dataset.spact === "delyes") { delete S.docs[id]; S.docs.settings = Object.assign(clone(settings()), { activeSplit: null }); lsSave(); renderAll(); toast("Split gelöscht"); }
+  if (b.dataset.spact === "delno") renderWorkouts();
+});
+
+/* Workout-Editor mit Reihenfolge */
+let editingWo = null, woDraft = [];
+function orderHTML(ids, nameFn) {
+  return ids.length ? ids.map((id, i) => `<li><span>${esc(nameFn(id))}</span><div class="mv"><button type="button" data-mv="up" data-i="${i}" ${i ? "" : "disabled"} aria-label="Nach oben">↑</button><button type="button" data-mv="down" data-i="${i}" ${i < ids.length - 1 ? "" : "disabled"} aria-label="Nach unten">↓</button><button type="button" class="rm" data-mv="rm" data-i="${i}" aria-label="Entfernen">×</button></div></li>`).join("") : `<li class="none">Noch leer. Füg unten etwas hinzu.</li>`;
+}
+function moveIn(arr, e) { const b = e.target.closest("[data-mv]"); if (!b) return false; const i = +b.dataset.i;
+  if (b.dataset.mv === "up" && i > 0) [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]];
+  if (b.dataset.mv === "down" && i < arr.length - 1) [arr[i + 1], arr[i]] = [arr[i], arr[i + 1]];
+  if (b.dataset.mv === "rm") arr.splice(i, 1); return true; }
+function renderWoOrder() {
+  $("#woOrder").innerHTML = orderHTML(woDraft, exName);
+  const sel = $("#woAddSel"), keep = sel.value;
+  sel.innerHTML = `<option value="">Übung wählen …</option>` + exercises().filter(e => !woDraft.includes(e._id)).map(e => `<option value="${esc(e._id)}">${esc(e.name)}</option>`).join("") + `<option value="__new">+ Neue Übung …</option>`;
+  if ([...sel.options].some(o => o.value === keep)) sel.value = keep;
+  $("#woNewWrap").hidden = sel.value !== "__new";
+}
+$("#woOrder").addEventListener("click", e => { if (moveIn(woDraft, e)) renderWoOrder(); });
+$("#woAddSel").addEventListener("change", () => { $("#woNewWrap").hidden = $("#woAddSel").value !== "__new"; if ($("#woAddSel").value === "__new") $("#woNew").focus(); });
+function woAdd() {
+  let id = $("#woAddSel").value;
+  if (id === "__new") { const n = $("#woNew").value.trim(); if (!n) { toast("Gib einen Namen für die neue Übung ein."); return; } id = createExercise(n.slice(0, 40)); lsSave(); $("#woNew").value = ""; }
+  if (!id) { toast("Wähl zuerst eine Übung aus."); return; }
+  if (!woDraft.includes(id)) woDraft.push(id); $("#woAddSel").value = ""; renderWoOrder(); renderExList();
+}
+$("#woAddBtn").addEventListener("click", woAdd);
+$("#woNew").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); woAdd(); } });
+function resetWoForm() { editingWo = null; woDraft = []; $("#woForm").reset(); $("#woFormTitle").textContent = "Workout erstellen"; $("#woSubmit").textContent = "Workout speichern"; $("#woCancel").hidden = true; renderWoOrder(); }
 $("#woCancel").addEventListener("click", resetWoForm);
 $("#woForm").addEventListener("submit", e => {
   e.preventDefault();
   const name = $("#woName").value.trim(); if (!name) return;
-  const ids = $$("#woEx input:checked").map(i => i.value);
-  $("#woNew").value.split(",").map(x => x.trim()).filter(Boolean).forEach(n => { const id = createExercise(n.slice(0, 40)); if (!ids.includes(id)) ids.push(id); });
-  if (!ids.length) { toast("Wähl mindestens eine Übung aus oder trag eine neue ein."); return; }
+  if ($("#woAddSel").value === "__new" && $("#woNew").value.trim()) woAdd();
+  if (!woDraft.length) { toast("Füg mindestens eine Übung hinzu."); return; }
   const color = ($("#woColors input:checked") || {}).value || "red";
-  const id = editingWo || "wo_" + uid();
-  const base = editingWo ? clone(S.docs[editingWo]) : { kind: "workout", created: Date.now() };
-  writeDoc(id, Object.assign(base, { name, color, exIds: ids }));
-  toast(editingWo ? `${name} geändert` : `${name} angelegt`); resetWoForm();
+  const id = editingWo || "wo_" + uid(), base = editingWo ? clone(S.docs[editingWo]) : { kind: "workout", created: Date.now() };
+  const wasNew = !editingWo;
+  writeDoc(id, Object.assign(base, { name, color, exIds: [...woDraft] }));
+  const sp = activeSplit();
+  if (wasNew && sp) { S.docs[sp._id] = Object.assign(clone(S.docs[sp._id]), { woIds: [...(sp.woIds || []), id] }); lsSave(); renderAll(); toast(`${name} angelegt und zu „${sp.name}“ hinzugefügt`); }
+  else toast(wasNew ? `${name} angelegt` : `${name} gespeichert`);
+  resetWoForm();
 });
 $("#woList").addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
@@ -653,22 +761,56 @@ $("#woList").addEventListener("click", e => {
   const act = b.dataset.act;
   if (act === "start") startSession(id);
   if (act === "edit") {
-    editingWo = id; $("#woEx").dataset.filled = ""; $$("#woEx input").forEach(i => i.checked = false);
-    $("#woName").value = w.name; const r = $(`#woColors input[value="${w.color || "red"}"]`); if (r) r.checked = true;
-    renderWorkouts(); $("#woFormTitle").textContent = "Workout bearbeiten"; $("#woSubmit").textContent = "Änderungen speichern"; $("#woCancel").hidden = false;
+    editingWo = id; woDraft = (w.exIds || []).filter(x => S.docs[x]); $("#woName").value = w.name;
+    const r = $(`#woColors input[value="${w.color || "red"}"]`); if (r) r.checked = true;
+    $("#woFormTitle").textContent = `${w.name} bearbeiten`; $("#woSubmit").textContent = "Änderungen speichern"; $("#woCancel").hidden = false; renderWoOrder();
     $("#woForm").scrollIntoView({ behavior: "smooth", block: "start" });
   }
   if (act === "del") box.innerHTML = `<div class="confirm">„${esc(w.name)}“ löschen? Deine Sätze bleiben erhalten. <button class="btn danger sm" type="button" data-act="delyes">Löschen</button><button class="btn ghost sm" type="button" data-act="delno">Abbrechen</button></div>`;
-  if (act === "delyes") { writeDoc(id, null); toast("Workout gelöscht"); }
+  if (act === "delyes") {
+    delete S.docs[id]; splits().forEach(sp => { if ((sp.woIds || []).includes(id)) S.docs[sp._id] = Object.assign(clone(S.docs[sp._id]), { woIds: sp.woIds.filter(x => x !== id) }); });
+    if (editingWo === id) resetWoForm(); lsSave(); renderAll(); toast("Workout gelöscht");
+  }
   if (act === "delno") renderWorkouts();
 });
-$("#tplBox").addEventListener("click", e => {
-  if (e.target.id !== "tplBtn") return;
-  const T = [["Push", "red", ["Bankdrücken", "Schulterdrücken", "Schrägbankdrücken", "Seitheben", "Trizepsdrücken am Kabel"]],
-    ["Pull", "blue", ["Klimmzüge", "Langhantelrudern", "Latziehen", "Face Pulls", "Bizepscurls"]],
-    ["Beine", "green", ["Kniebeuge", "Rumänisches Kreuzheben", "Beinpresse", "Beinbeuger", "Wadenheben"]]];
-  T.forEach(([n, c, exs], i) => { S.docs["wo_" + uid()] = { kind: "workout", name: n, color: c, exIds: exs.map(createExercise), created: Date.now() + i }; });
-  lsSave(); renderAll(); toast("Push, Pull und Beine angelegt. Du kannst sie jederzeit anpassen.");
+
+/* Split-Editor */
+let editingSp = null, spDraft = [];
+function renderSpOrder() {
+  $("#spOrder").innerHTML = orderHTML(spDraft, id => S.docs[id] ? S.docs[id].name : "?");
+  $("#spAddSel").innerHTML = `<option value="">Workout wählen …</option>` + workouts().map(w => `<option value="${esc(w._id)}">${esc(w.name)}</option>`).join("");
+}
+$("#spOrder").addEventListener("click", e => { if (moveIn(spDraft, e)) renderSpOrder(); });
+$("#spAddBtn").addEventListener("click", () => { const id = $("#spAddSel").value; if (!id) { toast(workouts().length ? "Wähl zuerst ein Workout aus." : "Erstell zuerst ein Workout."); return; } spDraft.push(id); renderSpOrder(); });
+function resetSpForm() { editingSp = null; spDraft = []; $("#spForm").reset(); $("#spFormTitle").textContent = "Eigenen Split erstellen"; $("#spSubmit").textContent = "Split speichern"; $("#spCancel").hidden = true; renderSpOrder(); }
+$("#spCancel").addEventListener("click", resetSpForm);
+$("#spForm").addEventListener("submit", e => {
+  e.preventDefault(); const name = $("#spName").value.trim(); if (!name) return;
+  if (!spDraft.length) { toast("Füg mindestens ein Workout hinzu."); return; }
+  const id = editingSp || "split_" + uid(), base = editingSp ? clone(S.docs[editingSp]) : { kind: "split", created: Date.now() };
+  S.docs[id] = Object.assign(base, { name, woIds: [...spDraft] });
+  S.docs.settings = Object.assign(clone(settings()), { activeSplit: id });
+  toast(editingSp ? `${name} gespeichert` : `Split „${name}“ angelegt`); resetSpForm(); lsSave(); renderAll();
+  $("#woPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+/* Vorlagen */
+const TPL = [
+  { name: "Push · Pull · Beine", desc: "3 Workouts, z. B. 3 oder 6 Tage pro Woche", wos: [["Push", "red", ["Bankdrücken", "Schulterdrücken", "Schrägbankdrücken", "Seitheben", "Trizepsdrücken am Kabel"]], ["Pull", "blue", ["Klimmzüge", "Langhantelrudern", "Latziehen", "Face Pulls", "Bizepscurls"]], ["Beine", "green", ["Kniebeuge", "Rumänisches Kreuzheben", "Beinpresse", "Beinbeuger", "Wadenheben"]]] },
+  { name: "Oberkörper / Unterkörper", desc: "2 Workouts im Wechsel, z. B. 4 Tage pro Woche", wos: [["Oberkörper", "blue", ["Bankdrücken", "Langhantelrudern", "Schulterdrücken", "Latziehen", "Bizepscurls", "Trizepsdrücken am Kabel"]], ["Unterkörper", "green", ["Kniebeuge", "Rumänisches Kreuzheben", "Beinpresse", "Beinbeuger", "Wadenheben"]]] },
+  { name: "Ganzkörper A/B", desc: "2 Workouts im Wechsel, z. B. 3 Tage pro Woche", wos: [["Ganzkörper A", "red", ["Kniebeuge", "Bankdrücken", "Langhantelrudern", "Seitheben"]], ["Ganzkörper B", "yellow", ["Kreuzheben", "Schulterdrücken", "Klimmzüge", "Ausfallschritte"]]] },
+  { name: "Bro-Split", desc: "5 Workouts, ein Muskelbereich pro Tag", wos: [["Brust", "red", ["Bankdrücken", "Schrägbankdrücken", "Butterfly"]], ["Rücken", "blue", ["Klimmzüge", "Langhantelrudern", "Latziehen"]], ["Schultern", "yellow", ["Schulterdrücken", "Seitheben", "Face Pulls"]], ["Arme", "white", ["Bizepscurls", "Hammercurls", "Trizepsdrücken am Kabel"]], ["Beine", "green", ["Kniebeuge", "Beinpresse", "Beinbeuger", "Wadenheben"]]] },
+];
+$("#tplList").addEventListener("click", e => {
+  const b = e.target.closest("[data-tpl]"); if (!b) return; const t = TPL[+b.dataset.tpl];
+  const existing = workouts();
+  const ids = t.wos.map(([n, c, exs], i) => {
+    const found = existing.find(w => w.name.toLowerCase() === n.toLowerCase()); if (found) return found._id;
+    const id = "wo_" + uid(); S.docs[id] = { kind: "workout", name: n, color: c, exIds: exs.map(createExercise), created: Date.now() + i }; return id;
+  });
+  const spId = "split_" + uid(); S.docs[spId] = { kind: "split", name: t.name, woIds: ids, created: Date.now() };
+  S.docs.settings = Object.assign(clone(settings()), { activeSplit: spId });
+  $("#tplDetails").open = false; lsSave(); renderAll(); toast(`${t.name} angelegt. Tipp bei einem Workout auf „Bearbeiten“, um Übungen zu ändern.`);
 });
 $("#freeBtn").addEventListener("click", () => startSession(null));
 
@@ -677,7 +819,7 @@ let timerI = null;
 function startSession(woId) {
   const w = woId ? S.docs[woId] : null;
   S.active = { wo: woId, d: today(), exIds: w ? (w.exIds || []).filter(id => S.docs[id]) : [], start: Date.now() };
-  if (w) S.docs[woId] = Object.assign(clone(w), { last: today() });
+  if (w) S.docs[woId] = Object.assign(clone(w), { last: today(), lastAt: new Date().toISOString() });
   saveActive(); lsSave(); renderAll(); window.scrollTo({ top: $("#sessionArea").offsetTop - 10, behavior: "smooth" });
 }
 function prefill(ex, d) {
